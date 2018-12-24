@@ -93,6 +93,19 @@ request.get(VERSION_URI, (err, response, body) => {
 这些使用node都可以完成，不过写了之后感觉代码量多了，写了两行shell代替执行；
 执行shell脚本的话用node的child_proces模块中的exec就好了；
 
+* shell脚本， (相对简单，没做异常处理)
+
+```shell
+#!/bin/bash
+
+unzip /d/vscode_update_program/vscodePackage/vscode.zip -d /d/vscode_update_program/vscodePackage/package/
+rm -rf /d/vscode/*
+mv /d/vscode_update_program/vscodePackage/package/* /d/vscode/
+rm -rf /d/vscode_update_program/vscodePackage/vscode.zip
+
+exit
+```
+
 ```js
 file.on('finish', () => {
     exec(SHELL_PATH, (err, stdout, stderr) => {
