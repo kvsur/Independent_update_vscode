@@ -95,7 +95,7 @@ request.get(VERSION_URI, (err, response, body) => {
 
 * shell脚本， (相对简单，没做异常处理)
 
-```shell
+```Bash
 #!/bin/bash
 
 unzip /d/vscode_update_program/vscodePackage/vscode.zip -d /d/vscode_update_program/vscodePackage/package/
