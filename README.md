@@ -1,5 +1,7 @@
 ### 手动更新vscode，拉去官方zip包覆盖式更新
 
+[github repository](https://github.com/kvsur/hanle_vscode_update)
+
 vscode 在各大平台都有对应的不同的安装方式，windows 系统中有一个下载zip包安装的方式；
 
 ![安装方式选择](./assets/install-type.png)
