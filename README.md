@@ -1,6 +1,7 @@
-### 手动更新vscode，拉去官方zip包覆盖式更新
+## 通过脚本的方式手动更新vscode
+（如果一开始是以zip方式安装且为windows）
 
-[github repository](https://github.com/kvsur/hanle_vscode_update)
+[github repository](https://github.com/kvsur/Independent_update_vscode)
 
 vscode 在各大平台都有对应的不同的安装方式，windows 系统中有一个下载zip包安装的方式；
 
@@ -15,178 +16,73 @@ vscode 在各大平台都有对应的不同的安装方式，windows 系统中�
 然后就想，与其等它推送繁琐更新，还不如自己去拉包更新，然后做一点的小小的脚本自动化；
 
 
-### 总体思路介绍
+#### 0. 总体思路介绍
 
-1. 获取最新版本
-2. 拉取对应版本的zip文件
-3. 解压zip，覆盖更新
+1. 拉取对应版本的zip文件
+2. 解压zip，覆盖更新
 
-#### 1. 怎么获取最新版本号呢？
+#### 1. 怎么获取最新稳定版本呢？
 
-要更新到最新版，首要的是知道最新的版本号；这个是重点，网上看了下，有没有官方提供的接口获取最新版本号之类的，
-并没有找到；那就自己找吧，把vscode官方页面翻了一下，发现了这个奇特的号码；而且提供的是完整的版本号；
+如上版本信息展示图中，我们点击 .zip 64bit 想要下载zip包时，页面路由发生变化，新路由中页面请求了一个重的路径
 
-![最新版本号](./assets/latest-version.png)
-
-好的，既然知道哪儿有版本号，那拿到它就相对简单了；
-
-![最新版本号](./assets/npm-request.png)
-
-借用request请求[https://code.visualstudio.com/updates/v1_30](https://code.visualstudio.com/updates/v1_30)以获取页面内容
-进而使用正则匹配到version就好了；
-
-* config
-```js
-module.exports = {
-    ZIP_URI: ['https://vscode.cdn.azure.cn/stable/dea8705087adb1b5e5ae1d9123278e178656186a/VSCode-win32-x64-', '.zip'],
-    VERSION_URI: 'https://code.visualstudio.com/updates/v1_30',
-    SHELL_PATH: 'd:/vscode_update_program/update.sh',
-    ARCHIVE_PATH: 'd:/vscode_update_program/vscodePackage/vscode.zip',
-    MESSAGE: {
-        success: 'green', // 成功输出内容
-        error: 'red', // 错误输出内容
-        warning: 'yellow', // 警告输出内容 
-    },
+```json
+{
+    'Request URL': 'https://update.code.visualstudio.com/latest/win32-x64-archive/stable',
+    'Request Method': 'GET',
+    'Status Code': '302 Found',
+    'Remote Address': '104.42.78.153:443',
+    'Referrer Policy': 'no-referrer-when-downgrade',
 }
 ```
+![更新按钮](./assets/302.route.png)
 
-#### 2. 拉取zip包
+这是一个重定向的请求，接着重定向到了
 
-vscode的zip下载地址是固定模式的，变化的是版本号，所以将获取的版本join到zip请求地址中即可，再使用request拉取zip文件流保存到本地；
-zip包获取接口返回的是文件流，需要借助fs文件模块；
+![更新按钮](./assets/fetch.zip.png)
+
+所以通过这样的方式，最终能拿到code.zip文件的到本地，在node脚本中使用request处理这些请求，request能处理重定向，然后将返回的文件流保存到本地磁盘即可
 
 ```js
-// 首先获取最新的版本号
-request.get(VERSION_URI, (err, response, body) => {
-    const html = body.toString();
-
-    // 通过 strong 标签 加上 Update 关键字匹配到信息 节点
-    const infoReg = (/<strong>Update[^(</strong>)]+<\/strong>/g);
-
-    // 再一次精准匹配版本号 version
-    const versionReg = (/\d.+</g);
-
-    const version = html.match(infoReg)[0].match(versionReg)[0].replace('<', '');
-
-    // 将版本号插入到拉取zip文件的URI中取
-    const vscode_udpate_url = ZIP_URI.join(version);
-
-    // 创建即将拉取的zip文件的文件流
     const file = fs.createWriteStream(ARCHIVE_PATH);
 
-    // 拉取版本号对应的zip文件
-    request.get(vscode_udpate_url).on('error', e => {
+    // fetch the lasest stable version of vscode
+    request.get(STABLE_URI).on('error', e => {
         error(e.message);
-        error(`vscode更新失败，版本号：${version}`);
+        error(`Update vscode failed.`);
     }).pipe(file);
-});
 ```
 
-#### 3. 解压zip包，覆盖式更新vscode
+#### 2. 拿到包之后覆盖更新本地文件
 
-好的，既然拿到了更新包文件，那就开始更新吧；
-1. 解压
-2. 删除旧版本
-3. 移动解压文件到安装目录
-4. 删除下载的zip文件
+这个地方的逻辑相对简单，使用几行shell命令来搞定
 
-这些使用node都可以完成，不过写了之后感觉代码量多了，写了两行shell代替执行；
-执行shell脚本的话用node的child_proces模块中的exec就好了；
-
-* shell脚本， (相对简单，没做异常处理)
-
-```Bash
+```bash
 #!/bin/bash
+echo ${1}
+echo ${2}
+echo ${3}
 
-unzip /d/vscode_update_program/vscodePackage/vscode.zip -d /d/vscode_update_program/vscodePackage/package/
-rm -rf /d/vscode/*
-mv /d/vscode_update_program/vscodePackage/package/* /d/vscode/
-rm -rf /d/vscode_update_program/vscodePackage/vscode.zip
-
+unzip ${1} -d ${2}/
+rm -rf ${3}/*
+mv ${2}/* ${3}/
+rm -rf ${1} ${2}/*
 exit
 ```
 
-```js
-file.on('finish', () => {
-    exec(SHELL_PATH, (err, stdout, stderr) => {
-        if (err) {
-            error(err);
-            error(`vscode更新失败，版本号：${version}`);
-        }
-        if (stderr) {
-            warning(stderr);
-        } else {
-            success(`vscode更新成功，版本号：${version}`);
-        }
-    });
-});
-```
+#### 3. 配置文件
 
-#### 4. 完整代码
-
-另外用了一个小小彩色输出库chalk用来打印日志；
 
 ```js
-const chalk = require('chalk');
-const chalkConfig = require('./config').MESSAGE;
-
-Object.keys(chalkConfig).forEach(key => {
-    module.exports[key] = content => {
-        console.log(chalk[chalkConfig[key]](content));
-    }
-});
-```
-
-以下是更新部分的完整代码：
-
-```js
-const request = require('request');
-const fs = require('fs');
-const exec = require('child_process').exec;
-const { success, error, warning } = require('./message');
-const { ZIP_URI, VERSION_URI, ARCHIVE_PATH, SHELL_PATH } = require('./config');
-
-module.exports = () => {
-    // 首先获取最新的版本号
-    request.get(VERSION_URI, (err, response, body) => {
-        const html = body.toString();
-
-        // 通过 strong 标签 加上 Update 关键字匹配到信息 节点
-        const infoReg = (/<strong>Update[^(</strong>)]+<\/strong>/g);
-
-        // 再一次精准匹配版本号 version
-        const versionReg = (/\d.+</g);
-
-        const version = html.match(infoReg)[0].match(versionReg)[0].replace('<', '');
-
-        // 将版本号插入到拉取zip文件的URI中取
-        const vscode_udpate_url = ZIP_URI.join(version);
-
-        // 创建即将拉取的zip文件的文件流
-        const file = fs.createWriteStream(ARCHIVE_PATH);
-
-        // 拉取版本号对应的zip文件
-        request.get(vscode_udpate_url).on('error', e => {
-            error(e.message);
-            error(`vscode更新失败，版本号：${version}`);
-        }).pipe(file);
-
-        file.on('finish', () => {
-            exec(SHELL_PATH, (err, stdout, stderr) => {
-                if (err) {
-                    error(err);
-                    error(`vscode更新失败，版本号：${version}`);
-                }
-                if (stderr) {
-                    warning(stderr);
-                } else {
-                    success(`vscode更新成功，版本号：${version}`);
-                }
-            });
-        });
-    });
+module.exports = {
+    SHELL_PATH: '/d/vscode_update_program/update.sh', // 更新版本所需shell脚本的存放位置
+    INSTALL_PATH: '/d/vscode',
+    UNZIP_PATH: '/d/vscode_update_program/vscodePackage/package',
+    ARCHIVE_PATH: '/d/vscode_update_program/vscodePackage/vscode.zip', // 新版本压缩包下载后存放路径
+    STABLE_URI: 'https://update.code.visualstudio.com/latest/win32-x64-archive/stable', // 最新稳定版包的获取地址
+    MESSAGE: {
+        success: 'green',
+        error: 'red',
+        warning: 'yellow',
+    },
 }
 ```
-
-#### 最后
-不是说不会安装vscode其他方式，只是刚好想尝试一下这样的更新方式；当然，肯定推荐直接安装exe、rpm之类的；
